@@ -74,10 +74,11 @@ async def addSimpleCommand(context, regex: str, message: str):
 async def approveSimpleCommand(context, id: int = 1):
     'Approves a command. Request queue is 1-indexed'
 
+    # Assert privilege
     if context.message.author.id != args.config['adminId']:
         await bot.say('Denied')
         return
-    
+
     # Assert valid id
     if not 1 <= id <= len(commandRequests):
         await bot.say('Invalid request id')
@@ -85,17 +86,32 @@ async def approveSimpleCommand(context, id: int = 1):
 
     # Instatiate command and remove from requests queue
     command = commandRequests.pop(id - 1)
-    @bot.command(name = command.regex)
-    async def f():
-        await bot.say(command.message)
+    bot.command(name = command.regex, help = command.message)(makeSayWrapper(command.message))
 
     # Add to simple commands JSON file
     global simpleCommands
     simpleCommands += [command]
     with open('commands.json', 'w') as f:
         json.dump(simpleCommands, f, indent = 4)
-    
+
     await bot.say(f'Approved command: {command.regex}')
+
+@bot.command(name = r'/deny', pass_context = True)
+async def denySimpleCommand(context, id: int = 1):
+    'Denies a command. Request queue is 1-indexed'
+
+    # Assert privilege
+    if context.message.author.id != args.config['adminId']:
+        await bot.say('Denied')
+        return
+
+    # Assert valid id
+    if not 1 <= id <= len(commandRequests):
+        await bot.say('Invalid request id')
+        return
+
+    command = commandRequests.pop(id - 1)
+    await bot.say(f'Denied command: {command.regex}')
 
 # Load simple commands
 SimpleCommand = namedtuple('SimpleCommand', ['regex', 'message'])
@@ -110,14 +126,13 @@ def makeSayWrapper(message):
     async def wrapper():
         async def say(message):
             await bot.say(message)
-    
+
         return await say(message)
-    
+
     return wrapper
-        
 
 for command in simpleCommands:
-    bot.command(name = command.regex)(makeSayWrapper(command.message))
+    bot.command(name = command.regex, help = command.message)(makeSayWrapper(command.message))
 
 commandRequests = []
 
