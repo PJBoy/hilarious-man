@@ -1,6 +1,7 @@
 import bot
 import discord, discord.ext.commands
-import aiohttp, argparse, json, logging, pathlib, random, urllib.parse
+import aiohttp, argparse, json, logging, pathlib, random, re, urllib.parse
+from collections import namedtuple
 
 logging.basicConfig(level = logging.INFO)
 
@@ -14,7 +15,7 @@ argparser.add_argument('config', type = parseJsonFile, nargs = '?', default = pa
 args = argparser.parse_args()
 
 # Define bot #
-bot = bot.RegexBot(command_prefix = '', description = 'Hilarious Man, the bot for you and me')
+bot = bot.RegexBot(command_prefix = '', help_attrs = {'name': r'/help'}, description = 'Hilarious Man, the bot for you and me')
 
 @bot.command(name = r'/ka(?:ren)?', pass_context = True)
 async def karen(context, *, query : str):
@@ -52,6 +53,61 @@ async def karen(context, *, query : str):
     embed.set_image(url = karen_image_url(episodeName, timestamp))
 
     await bot.say(embed = embed)
+
+@bot.command(name = r'/add_?command', pass_context = True)
+async def addSimpleCommand(context, regex: str, message: str):
+    'Add a command. Format: /add "regex" "message"'
+
+    # Check if valid regex
+    try:
+        re.compile(regex, re.IGNORECASE)
+    except re.error as e:
+        await bot.say(f'Invalid regex "{e.pattern}": {e.msg}')
+        return
+
+    # Add to queue
+    global commandRequests
+    commandRequests += [SimpleCommand(regex, message)]
+    await bot.say(f'Your command has been requested, you are number {len(commandRequests)} in the queue')
+
+@bot.command(name = r'/approve', pass_context = True)
+async def approveSimpleCommand(context, id: int = 1):
+    'Approves a command. Request queue is 1-indexed'
+
+    # Assert valid id
+    if not 1 <= id <= len(commandRequests):
+        await bot.say('Invalid request id')
+        return
+
+    # Instatiate command and remove from requests queue
+    command = commandRequests.pop(id - 1)
+    @bot.command(name = command.regex)
+    async def f():
+        await bot.say(command.message)
+
+    # Add to simple commands JSON file
+    global simpleCommands
+    simpleCommands += [command]
+    with open('commands.json', 'w') as f:
+        json.dump(simpleCommands, f, indent = 4)
+    
+    await bot.say('Approved')
+
+# Load simple commands
+SimpleCommand = namedtuple('SimpleCommand', ['regex', 'message'])
+simpleCommands = []
+try:
+    with open('commands.json') as f:
+        simpleCommands = [SimpleCommand(*command) for command in json.load(f)]
+except FileNotFoundError as e:
+    pass
+
+for command in simpleCommands:
+    @bot.command(name = command.regex)
+    async def f():
+        await bot.say(command.message)
+
+commandRequests = []
 
 # Main #
 bot.run(args.config['token'])
