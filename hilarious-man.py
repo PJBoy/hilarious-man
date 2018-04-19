@@ -74,6 +74,10 @@ async def addSimpleCommand(context, regex: str, message: str):
 async def approveSimpleCommand(context, id: int = 1):
     'Approves a command. Request queue is 1-indexed'
 
+    if context.message.author.id != args.config['adminId']:
+        await bot.say('Denied')
+        return
+    
     # Assert valid id
     if not 1 <= id <= len(commandRequests):
         await bot.say('Invalid request id')
@@ -91,7 +95,7 @@ async def approveSimpleCommand(context, id: int = 1):
     with open('commands.json', 'w') as f:
         json.dump(simpleCommands, f, indent = 4)
     
-    await bot.say('Approved')
+    await bot.say(f'Approved command: {command.regex}')
 
 # Load simple commands
 SimpleCommand = namedtuple('SimpleCommand', ['regex', 'message'])
@@ -102,10 +106,18 @@ try:
 except FileNotFoundError as e:
     pass
 
+def makeSayWrapper(message):
+    async def wrapper():
+        async def say(message):
+            await bot.say(message)
+    
+        return await say(message)
+    
+    return wrapper
+        
+
 for command in simpleCommands:
-    @bot.command(name = command.regex)
-    async def f():
-        await bot.say(command.message)
+    bot.command(name = command.regex)(makeSayWrapper(command.message))
 
 commandRequests = []
 

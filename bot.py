@@ -118,7 +118,6 @@ class RegexBot(discord.ext.commands.Bot):
                 try:
                     await command.invoke(ctx)
                     self.dispatch('command_completion', command, ctx)
-                    return
                 except discord.ext.commands.CommandError as e:
                     ctx.command.dispatch_error(e, ctx)
-                    return
+                return
