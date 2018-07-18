@@ -1,6 +1,7 @@
 import bot
 import discord, discord.ext.commands
-import aiohttp, argparse, json, logging, pathlib, random, re, urllib.parse
+import aiohttp
+import argparse, json, logging, pathlib, random, re, urllib.parse
 from collections import namedtuple
 
 logging.basicConfig(level = logging.INFO)
@@ -16,6 +17,33 @@ args = argparser.parse_args()
 
 # Define bot #
 bot = bot.RegexBot(command_prefix = '', help_attrs = {'name': r'/help'}, description = 'Hilarious Man, the bot for you and me')
+
+@bot.command(name = r'/yt', pass_context = True)
+async def yt(context, *, query : str):
+    'Returns the first result for a youtube search'
+    
+    youtube_url_results = 'http://www.youtube.com/results'
+    youtube_url_watch = 'http://www.youtube.com/watch'
+
+    async def yt_search(quote):
+        async with aiohttp.get(youtube_url_results, params = {'q': quote}) as r:
+            if r.status != 200:
+                raise RuntimeError(f'{r.status} - {r.reason}')
+            source = await r.text()
+            return re.findall(r'href="\/watch\?v=(.{11})', source)
+
+    def yt_watch_url(videoId):
+        queryString = urllib.parse.urlencode({'v': videoId})
+        return f'{youtube_url_watch}?{queryString}'
+    
+    results = await yt_search(query)
+    if len(results) == 0:
+        await bot.say('No results')
+        return
+        
+    firstResult = results[0]
+    
+    await bot.say(f'{yt_watch_url(firstResult)}')
 
 @bot.command(name = r'/ka(?:ren)?', pass_context = True)
 async def karen(context, *, query : str):
@@ -37,7 +65,7 @@ async def karen(context, *, query : str):
 
     results = await karen_search(query)
     if len(results) == 0:
-        await bot.say('No results')
+        await bot.say("Why don't you ask me later")
         return
 
     firstResult = results[0]
@@ -112,6 +140,7 @@ async def denySimpleCommand(context, id: int = 1):
 
     command = commandRequests.pop(id - 1)
     await bot.say(f'Denied command: {command.regex}')
+
 
 # Load simple commands
 SimpleCommand = namedtuple('SimpleCommand', ['regex', 'message'])
