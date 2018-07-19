@@ -1,62 +1,17 @@
-import discord.ext.commands, discord.ext.commands.view, discord.ext.commands.bot
+import discord.ext.commands, discord.ext.commands.bot, discord.ext.commands.formatter, discord.ext.commands.view
 import copy, re
 
 async def help_command(ctx, *commands : str):
     'Shows this message'
-    
+
     bot = ctx.bot
     destination = ctx.message.author if bot.pm_help else ctx.message.channel
 
     def repl(obj):
         return discord.ext.commands.bot._mentions_transforms.get(obj.group(0), '')
 
-    # help by itself just lists our own commands.
-    if len(commands) == 0:
-        pages = bot.formatter.format_help_for(ctx, bot)
-    elif len(commands) == 1:
-        # try to see if it is a cog name
-        name = discord.ext.commands.bot._mention_pattern.sub(repl, commands[0])
-        command = None
-        if name in bot.cogs:
-            command = bot.cogs[name]
-        else:
-            for c in bot.commands.values():
-                if re.match(c.name, name, re.IGNORECASE):
-                    command = c
-                    break
-
-            if command is None:
-                await bot.send_message(destination, bot.command_not_found.format(name))
-                return
-
-        pages = bot.formatter.format_help_for(ctx, command)
-    else:
-        name = discord.ext.commands.bot._mention_pattern.sub(repl, commands[0])
-        for c in bot.commands.values():
-            if re.match(c.name, name, re.IGNORECASE):
-                command = c
-                break
-
-        if command is None:
-            await bot.send_message(destination, bot.command_not_found.format(name))
-            return
-
-        for key in commands[1:]:
-            try:
-                key = discord.ext.commands.bot._mention_pattern.sub(repl, key)
-                for c in command.commands.values():
-                    if re.match(c.name, key, re.IGNORECASE):
-                        command = c
-                        break
-
-                if command is None:
-                    await bot.send_message(destination, bot.command_not_found.format(key))
-                    return
-            except AttributeError:
-                await bot.send_message(destination, bot.command_has_no_subcommands.format(command, key))
-                return
-
-        pages = bot.formatter.format_help_for(ctx, command)
+    # help just lists our own commands.
+    pages = bot.formatter.format_help_for(ctx, bot)
 
     if bot.pm_help is None:
         characters = sum(map(lambda l: len(l), pages))
@@ -67,8 +22,9 @@ async def help_command(ctx, *commands : str):
     for page in pages:
         await bot.send_message(destination, page)
 
+
 class RegexBot(discord.ext.commands.Bot):
-    'Derived class of existing Bot designed to support regex commands'
+    'Derived class of existing Bot designed to support regex and server specific commands'
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -76,8 +32,20 @@ class RegexBot(discord.ext.commands.Bot):
         del self.commands[self.help_attrs['name']]
         self.command(**self.help_attrs)(help_command)
 
+    def command(self, name, server = None, *args, **kwargs):
+        kwargs['pass_context'] = True
+        def decorator(f):
+            def doesServerMatch(ctx):
+                return server == None or server == ctx.message.server.id
+
+            command = discord.ext.commands.Bot.command(self, name, *args, **kwargs)(f)
+            self.commands[command.name].server = server
+            self.commands[command.name].checks += [doesServerMatch]
+            return command
+
+        return decorator
+
     async def process_commands(self, message):
-        # Not sure what these assignments are for
         _internal_channel = message.channel
         _internal_author = message.author
 
@@ -103,21 +71,37 @@ class RegexBot(discord.ext.commands.Bot):
             else:
                 match = re.search(command.name, invoker, re.IGNORECASE)
             if match:
-                matched_view = copy.deepcopy(view)
-                matched_view.skip_string(match[0])
-                matched_view.skip_ws()
-                tmp = {
-                    'bot': self,
-                    'invoked_with': invoker,
-                    'message': message,
-                    'view': matched_view,
-                    'prefix': invoked_prefix
-                }
-                ctx = discord.ext.commands.Context(**tmp)
-                self.dispatch('command', command, ctx)
-                try:
-                    await command.invoke(ctx)
-                    self.dispatch('command_completion', command, ctx)
-                except discord.ext.commands.CommandError as e:
-                    ctx.command.dispatch_error(e, ctx)
-                return
+                break
+        else:
+            return
+
+        matched_view = copy.deepcopy(view)
+        matched_view.skip_string(match[0])
+        matched_view.skip_ws()
+        tmp = {
+            'bot': self,
+            'invoked_with': invoker,
+            'message': message,
+            'view': matched_view,
+            'prefix': invoked_prefix
+        }
+        ctx = discord.ext.commands.Context(**tmp)
+        self.dispatch('command', command, ctx)
+        try:
+            await command.invoke(ctx)
+            self.dispatch('command_completion', command, ctx)
+        except discord.ext.commands.CommandError as e:
+            ctx.command.dispatch_error(e, ctx)
+
+
+class HelpFormatter(discord.ext.commands.formatter.HelpFormatter):
+    'Derived class of existing HelpFormatter designed to be rid of the footer message and width restriction'
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def get_ending_note(self):
+        return ''
+
+    def shorten(self, text):
+        return text

@@ -16,17 +16,17 @@ argparser.add_argument('config', type = parseJsonFile, nargs = '?', default = pa
 args = argparser.parse_args()
 
 # Define bot #
-bot = bot.RegexBot(command_prefix = '', help_attrs = {'name': r'/help'}, description = 'Hilarious Man, the bot for you and me')
+bot = bot.RegexBot(command_prefix = '', help_attrs = {'name': r'/help'}, formatter = bot.HelpFormatter(), description = 'Hilarious Man, the bot for you and me')
 
-@bot.command(name = r'/yt', pass_context = True)
+@bot.command(r'/yt')
 async def yt(context, *, query : str):
     'Returns the first result for a youtube search'
-    
+
     youtube_url_results = 'http://www.youtube.com/results'
     youtube_url_watch = 'http://www.youtube.com/watch'
 
-    async def yt_search(quote):
-        async with aiohttp.get(youtube_url_results, params = {'q': quote}) as r:
+    async def yt_search(query):
+        async with aiohttp.get(youtube_url_results, params = {'q': query}) as r:
             if r.status != 200:
                 raise RuntimeError(f'{r.status} - {r.reason}')
             source = await r.text()
@@ -35,17 +35,17 @@ async def yt(context, *, query : str):
     def yt_watch_url(videoId):
         queryString = urllib.parse.urlencode({'v': videoId})
         return f'{youtube_url_watch}?{queryString}'
-    
+
     results = await yt_search(query)
     if len(results) == 0:
         await bot.say('No results')
         return
-        
+
     firstResult = results[0]
-    
+
     await bot.say(f'{yt_watch_url(firstResult)}')
 
-@bot.command(name = r'/ka(?:ren)?', pass_context = True)
+@bot.command(r'/ka(?:ren)?')
 async def karen(context, *, query : str):
     'Creates hilarious spongebob quote'
 
@@ -82,7 +82,7 @@ async def karen(context, *, query : str):
 
     await bot.say(embed = embed)
 
-@bot.command(name = r'/add_?command', pass_context = True)
+@bot.command(r'/add_?command')
 async def addSimpleCommand(context, regex: str, message: str):
     'Add a command. Format: /add "regex" "message"'
 
@@ -98,7 +98,7 @@ async def addSimpleCommand(context, regex: str, message: str):
     commandRequests += [SimpleCommand(regex, message)]
     await bot.say(f'Your command has been requested, you are number {len(commandRequests)} in the queue')
 
-@bot.command(name = r'/approve', pass_context = True)
+@bot.command(r'/approve')
 async def approveSimpleCommand(context, id: int = 1):
     'Approves a command. Request queue is 1-indexed'
 
@@ -124,7 +124,7 @@ async def approveSimpleCommand(context, id: int = 1):
 
     await bot.say(f'Approved command: {command.regex}')
 
-@bot.command(name = r'/deny', pass_context = True)
+@bot.command(r'/deny')
 async def denySimpleCommand(context, id: int = 1):
     'Denies a command. Request queue is 1-indexed'
 
@@ -141,9 +141,14 @@ async def denySimpleCommand(context, id: int = 1):
     command = commandRequests.pop(id - 1)
     await bot.say(f'Denied command: {command.regex}')
 
+@bot.listen()
+async def on_ready():
+    print('Servers:')
+    for server in bot.servers:
+        print(f'{server} - {server.id!r}')
 
 # Load simple commands
-SimpleCommand = namedtuple('SimpleCommand', ['regex', 'message'])
+SimpleCommand = namedtuple('SimpleCommand', ['server', 'regex', 'message'])
 simpleCommands = []
 try:
     with open('commands.json') as f:
@@ -153,15 +158,12 @@ except FileNotFoundError as e:
 
 def makeSayWrapper(message):
     async def wrapper():
-        async def say(message):
-            await bot.say(message)
-
-        return await say(message)
+        await bot.say(message)
 
     return wrapper
 
 for command in simpleCommands:
-    bot.command(name = command.regex, help = command.message)(makeSayWrapper(command.message))
+    bot.command(command.regex, server = command.server, help = command.message)(makeSayWrapper(command.message))
 
 commandRequests = []
 
