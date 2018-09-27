@@ -49,6 +49,7 @@ class RegexBot(discord.ext.commands.Bot):
         _internal_channel = message.channel
         _internal_author = message.author
 
+        message.content = message.content.replace('*', '')
         view = discord.ext.commands.view.StringView(message.content)
         if self._skip_check(message.author, self.user):
             return
