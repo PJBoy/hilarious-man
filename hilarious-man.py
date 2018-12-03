@@ -1,4 +1,4 @@
-import bot
+import bot, daemons
 import discord, discord.ext.commands
 import aiohttp
 import argparse, bisect, json, logging, pathlib, random, re, string, urllib.parse
@@ -367,6 +367,10 @@ ramMapKeys = list(ramMap.keys())
 # Load miscellaneous JSON files
 with open('pokemon.json', 'r') as f:
     pokemon = json.load(f)
+
+# Start daemons
+for task in daemons.tasks:
+    bot.loop.create_task(task(bot))
 
 # Main #
 bot.run(args.config['token'])
