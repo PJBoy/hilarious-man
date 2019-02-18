@@ -68,7 +68,7 @@ class RegexBot(discord.ext.commands.Bot):
         invoker = copy.deepcopy(view).read_rest()
         for command in self.commands.values():
             if command.name.startswith('/'):
-                match = re.match(command.name, invoker, re.IGNORECASE)
+                match = re.match(command.name + r'\b', invoker, re.IGNORECASE)
             else:
                 match = re.search(command.name, invoker, re.IGNORECASE)
             if match:

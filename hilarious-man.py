@@ -1,6 +1,6 @@
 import bot, daemons
 import discord, discord.ext.commands
-import aiohttp
+import aiohttp, colour as color
 import argparse, bisect, json, logging, pathlib, random, re, string, urllib.parse
 from collections import namedtuple
 
@@ -18,6 +18,23 @@ args = argparser.parse_args()
 # Define bot #
 bot = bot.RegexBot(command_prefix = '', help_attrs = {'name': r'/help'}, formatter = bot.HelpFormatter(), description = 'Hilarious Man, the bot for you and me. Commands listed below are regular expressions')
 
+@bot.command(r'/colou?r')
+async def userColour(context, *, colour_text : str):
+    try:
+        colour = color.Color(colour_text)
+    except ValueError as e:
+        try:
+            colour = color.Color(f'#{colour_text}')
+        except ValueError as ee:
+            await bot.say(ee)
+            return
+    
+    if len(context.message.author.roles) < 2:
+        await bot.say("You have no role to colour")
+        return
+    
+    await bot.edit_role(context.message.server, context.message.author.roles[-1], colour = discord.Colour(int(colour.hex_l[1:], 16)))
+
 @bot.command(r'/hack')
 async def hackSearch(context, *, query : str):
     'Searches for a hack on MetConst'
@@ -31,7 +48,7 @@ async def hackSearch(context, *, query : str):
         async with aiohttp.get(metconst_url_hacks, params = {'search': query}) as r:
             if r.status != 200:
                 raise RuntimeError(f'{r.status} - {r.reason}')
-            
+
             source = await r.text()
             match = re.search(r'hack\.php\?id=(\d+)', source)
             return match[1] if match else None
@@ -40,7 +57,7 @@ async def hackSearch(context, *, query : str):
         async with aiohttp.get(metconst_url_hack, params = {'id': hackId}) as r:
             if r.status != 200:
                 raise RuntimeError(f'{r.status} - {r.reason}')
-            
+
             source = await r.text()
             match = re.search(r'<title>(.+?) - Metroid Construction</title>', source)
             title = match[1] if match else None
@@ -59,16 +76,16 @@ async def hackSearch(context, *, query : str):
         return
 
     title, author, authorId, screenshotUrls = await metconst_id(hackId)
-    
+
     queryString = urllib.parse.urlencode({'id': hackId})
     hackUrl = f'{metconst_url_hack}?{queryString}'
-    
+
     embed = discord.Embed(title = title, url = hackUrl, colour = context.message.author.colour)
     if screenshotUrls:
         screenshotUrl = random.sample(screenshotUrls, 1)[0]
         screenshotUrl = f'{metconst_url_files}/metconst-hacks/{hackId}/{screenshotUrl}'
         embed.set_image(url = screenshotUrl)
-        
+
     if author:
         embed.set_author(name = author, url = metconst_forum_profile_url(authorId))
 
@@ -289,7 +306,7 @@ async def approveSimpleCommand(context, id: int = 1):
 
     # Instatiate command and remove from requests queue
     command = commandRequests.pop(id - 1)
-    bot.command(name = command.regex, help = command.message)(makeSayWrapper(command.message))
+    bot.command(name = command.regex, help = command.message, server = command.server)(makeSayWrapper(command.message))
 
     # Add to simple commands JSON file
     global simpleCommands
