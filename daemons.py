@@ -6,7 +6,9 @@ import asyncio, async_timeout, datetime, html, logging, random, re, time, traceb
 metconst_update_channel_id = 518822602060464148
 magconst_update_channel_id = 962419389720821760
 metconst_url_forum_profile = 'http://forum.metroidconstruction.com/'
-sleepTime = 10
+sleepTime = 60
+
+# Need to add timestamps to all trace...
 
 def metconst_forum_profile_url(userId):
     queryString = urllib.parse.urlencode({'action': 'profile', 'u': userId})

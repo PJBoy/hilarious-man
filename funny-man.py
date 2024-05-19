@@ -115,7 +115,7 @@ async def trySimpleCommands(message):
 
 async def tryCommands(message):
     for command in commands:
-        match = re.match(command.regex, message.content)
+        match = re.match(command.regex, message.content, re.DOTALL)
         if match:
             try:
                 await command.callback(message, match)
@@ -136,11 +136,14 @@ def makeCommand(regex):
 
 
 # Bot commands #
-@makeCommand('/stadium')
+@makeCommand(r'/stadium *(\d*)')
 async def stadium(message, match):
     'Picks three random Kanto pokemon and three random Johto pokemon'
 
-    await message.channel.send('\n'.join(f'{x}: {pokemon[x - 1]}' for x in sorted(random.sample(range(1, 149), 3) + random.sample(range(152, 248), 3))))
+    if match[1] and int(match[1]) == 2:
+        await message.channel.send('\n'.join(f'{x}: {pokemon[x - 1]}' for x in sorted(random.sample(range(1, 149), 3) + random.sample(range(152, 248), 3))))
+    else:
+        await message.channel.send('\n'.join(f'{x}: {pokemon[x - 1]}' for x in sorted(random.sample(range(1, 149), 6))))
 
 @makeCommand(r'/aram2pc\s+(.+)')
 async def aram2pc(message, match):
@@ -239,7 +242,7 @@ async def yt(message, match):
 
     await message.channel.send(f'{yt_watch_url(firstResult)}')
 
-@makeCommand(r'/add_?command\s+"(.+?)"\s+"(.+?)"') # Need to address the fact that newline isn't supported for the response
+@makeCommand(r'/add_?command\s+"(.+?)"\s+"(.+?)"')
 async def addSimpleCommand(message, match):
     'Add a command. Format: /add "regex" "message"'
     
