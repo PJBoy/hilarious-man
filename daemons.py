@@ -27,7 +27,7 @@ async def getFeed(url):
         except Exception as e:
             logging.warning(f'{datetime.datetime.now()}:')
             logging.warning(f'RSS feed parse error for {url}:')
-            logging.warning(traceback.format_exc())
+            logging.warning(traceback.format_exc())but th
         
         await asyncio.sleep(sleepTime)
 
@@ -122,7 +122,7 @@ async def metconst_forum(bot):
 
 
 async def metconst_site_approved(bot):
-    'Does the site updates for inaccessible content'
+    'Does the site updates for accessible content'
 
     metconst_url_files = 'http://pjboy.cc:8001'
     metconst_url_rss_approved = 'http://metroidconstruction.com/recent.php?mode=atom&days=1&filters[]=Hack+Approved&filters[]=Hack+Review&filters[]=Resource+Approved&filters[]=Resource+Review'
