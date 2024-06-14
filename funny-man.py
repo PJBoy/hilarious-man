@@ -104,9 +104,9 @@ async def trySimpleCommands(message):
             continue
             
         if command.regex.startswith('/'):
-            match = re.match(command.regex, message.content)
+            match = re.match(command.regex, message.content, re.I)
         else:
-            match = re.search(command.regex, message.content)
+            match = re.search(command.regex, message.content, re.I)
         if match:
             await message.channel.send(command.message)
             return True

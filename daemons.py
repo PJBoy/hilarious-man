@@ -8,14 +8,16 @@ magconst_update_channel_id = 962419389720821760
 metconst_url_forum_profile = 'http://forum.metroidconstruction.com/'
 sleepTime = 60
 
-# Need to add timestamps to all trace...
+logging.basicConfig(format = '%(asctime)s - %(message)s', datefmt = '%Y-%m-%d %H:%M:%S', level = logging.INFO)
 
 def metconst_forum_profile_url(userId):
     queryString = urllib.parse.urlencode({'action': 'profile', 'u': userId})
     return f'{metconst_url_forum_profile}?{queryString}'
 
 async def getFeed(url):
+    i_attempt = 0
     while True:
+        logging.info(f'Attempt {i_attempt} - getFeed({url})')
         try:
             async with aiohttp.ClientSession() as session:
                 with async_timeout.timeout(sleepTime):
@@ -25,9 +27,8 @@ async def getFeed(url):
                         if feed.entries:
                             break
         except Exception as e:
-            logging.warning(f'{datetime.datetime.now()}:')
-            logging.warning(f'RSS feed parse error for {url}:')
-            logging.warning(traceback.format_exc())but th
+            logging.warning(f'RSS feed parse error for {url}')
+            logging.warning(traceback.format_exc())
         
         await asyncio.sleep(sleepTime)
 
@@ -66,16 +67,20 @@ def processHtml(text):
     # print()
     return html.unescape(text).replace('#039', '').replace('nbsp', '').replace('"quot', '"')
 
-async def processFeed(bot, rssUrl, entryProcessor):
+async def processFeed(who, bot, rssUrl, entryProcessor):
     await bot.wait_until_ready()
     feed = await getFeed(rssUrl)
+    logging.info(f'Got feed - processFeed({who})')
     while not bot.is_closed():
         mostRecentUpdated = max(entry.updated_parsed for entry in feed.entries)
+        logging.info(f'mostRecentUpdated = {toDateTime(mostRecentUpdated)} - processFeed({who})')
         feed = await getFeed(rssUrl)
+        logging.info(f'Got feed - processFeed({who})')
         for entry in reversed(feed.entries):
             if entry.updated_parsed <= mostRecentUpdated:
                 continue
 
+            logging.info(f'entry.updated_parsed = {toDateTime(entry.updated_parsed)} - processFeed({who})')
             await entryProcessor(entry)
 
         await asyncio.sleep(sleepTime)
@@ -118,7 +123,7 @@ async def metconst_forum(bot):
         await bot.get_channel(metconst_update_channel_id).send(embed = embed)
         await bot.get_channel(magconst_update_channel_id).send(embed = embed)
 
-    await processFeed(bot, metconst_url_forum_rss, processEntry)
+    await processFeed('metconst_forum', bot, metconst_url_forum_rss, processEntry)
 
 
 async def metconst_site_approved(bot):
@@ -208,7 +213,7 @@ async def metconst_site_approved(bot):
         await bot.get_channel(metconst_update_channel_id).send(msg, embed = embed)
         await bot.get_channel(magconst_update_channel_id).send(msg, embed = embed)
 
-    await processFeed(bot, metconst_url_rss_approved, processEntry)
+    await processFeed('metconst_site_approved', bot, metconst_url_rss_approved, processEntry)
 
 
 async def metconst_site_new(bot):
@@ -238,7 +243,7 @@ async def metconst_site_new(bot):
         await bot.get_channel(metconst_update_channel_id).send(msg, embed = embed)
         await bot.get_channel(magconst_update_channel_id).send(msg, embed = embed)
 
-    await processFeed(bot, metconst_url_rss_new, processEntry)
+    await processFeed('metconst_site_new', bot, metconst_url_rss_new, processEntry)
 
 
 async def metconst_wiki(bot):
@@ -254,7 +259,7 @@ async def metconst_wiki(bot):
         await bot.get_channel(metconst_update_channel_id).send(embed = embed)
         await bot.get_channel(magconst_update_channel_id).send(embed = embed)
 
-    await processFeed(bot, metconst_url_wiki_rss, processEntry)
+    await processFeed('metconst_wiki', bot, metconst_url_wiki_rss, processEntry)
 
 
 async def metconst_reddit(bot):
@@ -277,7 +282,7 @@ async def metconst_reddit(bot):
 
         await bot.get_channel(metconst_update_channel_id).send(embed = embed)
 
-    await processFeed(bot, metconst_url_reddit_rss, processEntry)
+    await processFeed('metconst_reddit', bot, metconst_url_reddit_rss, processEntry)
 
 
 tasks = [metconst_forum, metconst_site_approved, metconst_site_new, metconst_wiki, metconst_reddit]
