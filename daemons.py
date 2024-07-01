@@ -20,15 +20,25 @@ async def getFeed(url):
         logging.info(f'Attempt {i_attempt} - getFeed({url})')
         try:
             async with aiohttp.ClientSession() as session:
+                logging.info(f'opening client session ({url})')
                 with async_timeout.timeout(sleepTime):
+                    logging.info(f'timeout started ({url})')
                     async with session.get(url) as response:
+                        logging.info(f'session gotten ({url})')
                         html = await response.text()
+                        logging.info(f'respone text awaited ({url})')
                         feed = feedparser.parse(html)
+                        logging.info(f'feed parsed ({url})')
                         if feed.entries:
+                            logging.info(f'feed entries found ({url})')
                             break
+                            
+                        logging.info(f'feed entries not found ({url})')
         except Exception as e:
             logging.warning(f'RSS feed parse error for {url}')
             logging.warning(traceback.format_exc())
+        
+        i_attempt += 1
         
         await asyncio.sleep(sleepTime)
 
@@ -69,11 +79,13 @@ def processHtml(text):
 
 async def processFeed(who, bot, rssUrl, entryProcessor):
     await bot.wait_until_ready()
+    logging.info(f'Getting feed - processFeed({who})')
     feed = await getFeed(rssUrl)
     logging.info(f'Got feed - processFeed({who})')
     while not bot.is_closed():
         mostRecentUpdated = max(entry.updated_parsed for entry in feed.entries)
         logging.info(f'mostRecentUpdated = {toDateTime(mostRecentUpdated)} - processFeed({who})')
+        logging.info(f'Getting feed - processFeed({who})')
         feed = await getFeed(rssUrl)
         logging.info(f'Got feed - processFeed({who})')
         for entry in reversed(feed.entries):
@@ -92,21 +104,26 @@ async def metconst_forum(bot):
     metconst_url_forum_rss = 'https://forum.metroidconstruction.com/index.php?action=.xml;type=rss&quotes=0'
 
     async def metconst_id(link):
-        async with aiohttp.ClientSession() as session:
-            async with session.get(link) as r:
-                if r.status != 200:
-                    raise RuntimeError(f'{r.status} - {r.reason}')
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(link) as r:
+                    if r.status != 200:
+                        raise RuntimeError(f'{r.status} - {r.reason}')
 
-                source = await r.text()
-                match = re.search(r'.*#msg(\d+)', link)
-                authorId, author = None, None
-                if match:
-                    messageId = match[1]
-                    match = re.search(f'id="msg{messageId}".+?<a href=".+?u=(\\d+)".+?>(.+?)</a>', source, flags = re.DOTALL)
+                    source = await r.text()
+                    match = re.search(r'.*#msg(\d+)', link)
+                    authorId, author = None, None
                     if match:
-                        authorId, author = match[1], match[2]
+                        messageId = match[1]
+                        match = re.search(f'id="msg{messageId}".+?<a href=".+?u=(\\d+)".+?>(.+?)</a>', source, flags = re.DOTALL)
+                        if match:
+                            authorId, author = match[1], match[2]
 
-                return authorId, author
+                    return authorId, author
+        except Exception as e:
+            logging.warning(f'Error getting metconst profile ID for {link}')
+            logging.warning(traceback.format_exc())
+            return None, None
 
     async def processEntry(entry):
         logging.info(f'metconst_forum - {entry.title}')
@@ -133,44 +150,49 @@ async def metconst_site_approved(bot):
     metconst_url_rss_approved = 'http://metroidconstruction.com/recent.php?mode=atom&days=1&filters[]=Hack+Approved&filters[]=Hack+Review&filters[]=Resource+Approved&filters[]=Resource+Review'
 
     async def metconst_id(hackLink, hackId):
-        async with aiohttp.ClientSession() as session:
-            async with session.get(hackLink) as r:
-                if r.status != 200:
-                    raise RuntimeError(f'{r.status} - {r.reason}')
+        try:
+            async with aiohttp.ClientSession() as session:
+                async with session.get(hackLink) as r:
+                    if r.status != 200:
+                        raise RuntimeError(f'{r.status} - {r.reason}')
 
-                source = await r.text()
-                match = re.search(r'<b>Author:</b>\s*<a href=".+?action=profile;u=(\d+)">', source)
-                authorId = match[1] if match else None
-                
-                match = re.search(r'Pending</acronym>', source)
-                if match:
-                    stars_avg_score = None
-                    stars_avg = None
-                else:
-                    match = re.search(r'Average rating: (.+) chozo orbs', source)
-                    stars_avg_score = match[1] if match else None
-                
-                screenshotUrls = re.findall(fr'<img src=".+?files/(.+?/{hackId}/.+?)".*?>', source)
-                
-                matches = re.findall(r'(no_)?star\.png', source)
-                if not matches:
-                    stars = None
-                    stars_avg = None
-                else:
-                    stars = 0
-                    for i in range(5):
-                        if matches[-1 - i] != "no_":
-                            stars += 1
-                            
-                    if stars_avg_score != None:
-                        stars_avg = 0
-                        for i in range(5):
-                            if matches[i] != "no_":
-                                stars_avg += 1
-                    else:
+                    source = await r.text()
+                    match = re.search(r'<b>Author:</b>\s*<a href=".+?action=profile;u=(\d+)">', source)
+                    authorId = match[1] if match else None
+                    
+                    match = re.search(r'Pending</acronym>', source)
+                    if match:
+                        stars_avg_score = None
                         stars_avg = None
-                
-                return authorId, screenshotUrls, stars, stars_avg, stars_avg_score
+                    else:
+                        match = re.search(r'Average rating: (.+) chozo orbs', source)
+                        stars_avg_score = match[1] if match else None
+                    
+                    screenshotUrls = re.findall(fr'<img src=".+?files/(.+?/{hackId}/.+?)".*?>', source)
+                    
+                    matches = re.findall(r'(no_)?star\.png', source)
+                    if not matches:
+                        stars = None
+                        stars_avg = None
+                    else:
+                        stars = 0
+                        for i in range(5):
+                            if matches[-1 - i] != "no_":
+                                stars += 1
+                                
+                        if stars_avg_score != None:
+                            stars_avg = 0
+                            for i in range(5):
+                                if matches[i] != "no_":
+                                    stars_avg += 1
+                        else:
+                            stars_avg = None
+                    
+                    return authorId, screenshotUrls, stars, stars_avg, stars_avg_score
+        except Exception as e:
+            logging.warning(f'Error getting metadata for {hackLink} - {hackId}')
+            logging.warning(traceback.format_exc())
+            return None, None, None, None, None
 
     async def processEntry(entry):
         logging.info(f'metconst_site - {entry.title}')
