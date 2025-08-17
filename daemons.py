@@ -8,35 +8,51 @@ magconst_update_channel_id = 962419389720821760
 metconst_url_forum_profile = 'http://forum.metroidconstruction.com/'
 sleepTime = 60
 
+def setup_logger(name):
+    handler = logging.FileHandler(f'{name}.log')        
+    handler.setFormatter(logging.Formatter('%(asctime)s - %(message)s'))
+
+    logger = logging.getLogger(name)
+    logger.setLevel(logging.INFO)
+    logger.addHandler(handler)
+
+    return logger
+
+setup_logger('metconst_forum')
+setup_logger('metconst_site_approved')
+setup_logger('metconst_site_new')
+setup_logger('metconst_wiki')
+setup_logger('metconst_reddit')
+
 logging.basicConfig(format = '%(asctime)s - %(message)s', datefmt = '%Y-%m-%d %H:%M:%S', level = logging.INFO)
 
 def metconst_forum_profile_url(userId):
     queryString = urllib.parse.urlencode({'action': 'profile', 'u': userId})
     return f'{metconst_url_forum_profile}?{queryString}'
 
-async def getFeed(url):
+async def getFeed(who, url):
     i_attempt = 0
     while True:
-        logging.info(f'Attempt {i_attempt} - getFeed({url})')
+        logging.getLogger(who).info(f'Attempt {i_attempt} - getFeed({url})')
         try:
             async with aiohttp.ClientSession() as session:
-                logging.info(f'opening client session ({url})')
+                logging.getLogger(who).info(f'opening client session ({url})')
                 with async_timeout.timeout(sleepTime):
-                    logging.info(f'timeout started ({url})')
+                    logging.getLogger(who).info(f'timeout started ({url})')
                     async with session.get(url) as response:
-                        logging.info(f'session gotten ({url})')
+                        logging.getLogger(who).info(f'session gotten ({url})')
                         html = await response.text()
-                        logging.info(f'respone text awaited ({url})')
+                        logging.getLogger(who).info(f'respone text awaited ({url})')
                         feed = feedparser.parse(html)
-                        logging.info(f'feed parsed ({url})')
+                        logging.getLogger(who).info(f'feed parsed ({url})')
                         if feed.entries:
-                            logging.info(f'feed entries found ({url})')
+                            logging.getLogger(who).info(f'feed entries found ({url})')
                             break
                             
-                        logging.info(f'feed entries not found ({url})')
+                        logging.getLogger(who).info(f'feed entries not found ({url})')
         except Exception as e:
-            logging.warning(f'RSS feed parse error for {url}')
-            logging.warning(traceback.format_exc())
+            logging.getLogger(who).warning(f'RSS feed parse error for {url}')
+            logging.getLogger(who).warning(traceback.format_exc())
         
         i_attempt += 1
         
@@ -56,9 +72,8 @@ def processHtml(text):
     # print()
     
     # Hide spoilers
-    text = re.sub('<div.+?class="spoilerbody".*?></div>', r'', text)
-    text = re.sub('<div.+?class="spoilerbody".*?>(.*?)</div>', r'||\1||', text)
-    text = re.sub('<input.+?class="spoilerbutton".+?value="(.*?)".*?>(.*?)/>', r'\1 ', text)
+    text = re.sub('<div.+?class="spoiler_content".*?></div>', r'', text)
+    text = re.sub('<div.+?class="spoiler_content".*?>(.*?)</div>', r'||\1||', text)
     
     # Erase quotes
     # text = re.sub('<div.+?class="topslice_quote".*?>.*?</div>', r'', text)
@@ -79,20 +94,20 @@ def processHtml(text):
 
 async def processFeed(who, bot, rssUrl, entryProcessor):
     await bot.wait_until_ready()
-    logging.info(f'Getting feed - processFeed({who})')
-    feed = await getFeed(rssUrl)
-    logging.info(f'Got feed - processFeed({who})')
+    logging.getLogger(who).info(f'Getting feed - processFeed({who})')
+    feed = await getFeed(who, rssUrl)
+    logging.getLogger(who).info(f'Got feed - processFeed({who})')
     while not bot.is_closed():
         mostRecentUpdated = max(entry.updated_parsed for entry in feed.entries)
-        logging.info(f'mostRecentUpdated = {toDateTime(mostRecentUpdated)} - processFeed({who})')
-        logging.info(f'Getting feed - processFeed({who})')
-        feed = await getFeed(rssUrl)
-        logging.info(f'Got feed - processFeed({who})')
+        logging.getLogger(who).info(f'mostRecentUpdated = {toDateTime(mostRecentUpdated)} - processFeed({who})')
+        logging.getLogger(who).info(f'Getting feed - processFeed({who})')
+        feed = await getFeed(who, rssUrl)
+        logging.getLogger(who).info(f'Got feed - processFeed({who})')
         for entry in reversed(feed.entries):
             if entry.updated_parsed <= mostRecentUpdated:
                 continue
 
-            logging.info(f'entry.updated_parsed = {toDateTime(entry.updated_parsed)} - processFeed({who})')
+            logging.getLogger(who).info(f'entry.updated_parsed = {toDateTime(entry.updated_parsed)} - processFeed({who})')
             await entryProcessor(entry)
 
         await asyncio.sleep(sleepTime)
@@ -121,12 +136,12 @@ async def metconst_forum(bot):
 
                     return authorId, author
         except Exception as e:
-            logging.warning(f'Error getting metconst profile ID for {link}')
-            logging.warning(traceback.format_exc())
+            logging.getLogger('metconst_forum').warning(f'Error getting metconst profile ID for {link}')
+            logging.getLogger('metconst_forum').warning(traceback.format_exc())
             return None, None
 
     async def processEntry(entry):
-        logging.info(f'metconst_forum - {entry.title}')
+        logging.getLogger('metconst_forum').info(f'metconst_forum - {entry.title}')
         title = f'{entry.category} — {entry.title}'
         authorId, author = await metconst_id(entry.link)
 
@@ -174,7 +189,9 @@ async def metconst_site_approved(bot):
                     if not matches:
                         stars = None
                         stars_avg = None
+                        logging.getLogger('metconst_site_approved').error('Found no stars o_O')
                     else:
+                        logging.getLogger('metconst_site_approved').info(f'Matches: {matches}')
                         stars = 0
                         for i in range(5):
                             if matches[-1 - i] != "no_":
@@ -190,12 +207,12 @@ async def metconst_site_approved(bot):
                     
                     return authorId, screenshotUrls, stars, stars_avg, stars_avg_score
         except Exception as e:
-            logging.warning(f'Error getting metadata for {hackLink} - {hackId}')
-            logging.warning(traceback.format_exc())
+            logging.getLogger('metconst_site_approved').warning(f'Error getting metadata for {hackLink} - {hackId}')
+            logging.getLogger('metconst_site_approved').warning(traceback.format_exc())
             return None, None, None, None, None
 
     async def processEntry(entry):
-        logging.info(f'metconst_site - {entry.title}')
+        logging.getLogger('metconst_site_approved').info(f'metconst_site - {entry.title}')
         
         if re.search(f'Resource Approved', entry.title):
             embedColour = 0x00FF00
@@ -221,7 +238,8 @@ async def metconst_site_approved(bot):
             if screenshotUrls:
                 screenshotUrl = random.sample(screenshotUrls, 1)[0]
                 screenshotUrl = f'{metconst_url_files}/metconst-{screenshotUrl}'
-                embed.set_image(url = screenshotUrl)
+                # Disable this until I fix the "not a well formed URL" issue that sometimes happens
+                #embed.set_image(url = screenshotUrl)
 
             if authorId:
                 embed.set_author(name = author, url = metconst_forum_profile_url(authorId))
@@ -232,8 +250,13 @@ async def metconst_site_approved(bot):
         if stars_avg is not None:
             msg += '\nAverage: ' + ':full_moon: ' * stars_avg + ':new_moon: ' * (5 - stars_avg) + f' ({stars_avg_score})'
             
-        await bot.get_channel(metconst_update_channel_id).send(msg, embed = embed)
-        await bot.get_channel(magconst_update_channel_id).send(msg, embed = embed)
+        try:
+            logging.getLogger('metconst_site_approved').info(f'Sending bot message {msg} - {embed}')
+            await bot.get_channel(metconst_update_channel_id).send(msg, embed = embed)
+            await bot.get_channel(magconst_update_channel_id).send(msg, embed = embed)
+        except Exception as e:
+            logging.getLogger('metconst_site_approved').warning(f'Error sending bot message {msg} - {embed}')
+            logging.getLogger('metconst_site_approved').warning(traceback.format_exc())
 
     await processFeed('metconst_site_approved', bot, metconst_url_rss_approved, processEntry)
 
@@ -244,7 +267,7 @@ async def metconst_site_new(bot):
     metconst_url_rss_new = 'http://metroidconstruction.com/recent.php?mode=atom&days=1&filters[]=New+Hack&filters[]=Hack+Updated&filters[]=New+Resource&filters[]=Resource+Updated&filters[]=Speedrun'
 
     async def processEntry(entry):
-        logging.info(f'metconst_site - {entry.title}')
+        logging.getLogger('metconst_site_new').info(f'metconst_site - {entry.title}')
         
         if re.search(f'Resource Updated', entry.title):
             embedColour = 0x004000
@@ -274,7 +297,7 @@ async def metconst_wiki(bot):
     metconst_url_wiki_rss = 'https://wiki.metroidconstruction.com/feed.php'
 
     async def processEntry(entry):
-        logging.info(f'metconst_wiki - {entry.title}')
+        logging.getLogger('metconst_wiki').info(f'metconst_wiki - {entry.title}')
         embed = discord.Embed(title = entry.title, url = entry.link, description = processHtml(entry.summary), timestamp = toDateTime(entry.updated_parsed))
         author = ', '.join(author.name for author in entry.authors)
         embed.set_author(name = author)
@@ -290,16 +313,16 @@ async def metconst_reddit(bot):
     metconst_url_reddit_rss = 'https://reddit.com/r/metroidconstruction.rss'
 
     async def processEntry(entry):
-        logging.info(f'metconst_reddit - {entry.title}')
+        logging.getLogger('metconst_reddit').info(f'metconst_reddit - {entry.title}')
 
         title = entry.title
         url = entry.link
         description = remove_tags(html.unescape(entry.content[0].value))
-        logging.info(description)
+        logging.getLogger('metconst_reddit').info(description)
         timestamp = toDateTime(entry.published_parsed)
         embed = discord.Embed(title = title, url = url, description = description, timestamp = timestamp, color = 0x600000)
         if entry.author is not None:
-            logging.info(f'{entry.author_detail!r}')
+            logging.getLogger('metconst_reddit').info(f'{entry.author_detail!r}')
             embed.set_author(name = entry.author, url = entry.author_detail.href)
 
         await bot.get_channel(metconst_update_channel_id).send(embed = embed)
